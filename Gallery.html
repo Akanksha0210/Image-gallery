@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Responsive Image Gallery — Lightbox + Filters + Categories</title>
+  <style>
+    :root{
+      --gap: 12px;
+      --bg: #0f172a;
+      --card: #0b1220;
+      --accent: #7c3aed;
+      --text: #e6eef8;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%;margin:0;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,'Helvetica Neue',Arial}
+    body{background:linear-gradient(180deg,#071022 0%, #07142a 100%);color:var(--text);padding:28px}
+
+    .wrap{max-width:1100px;margin:0 auto}
+
+    header{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;margin-bottom:18px}
+    h1{font-size:20px;margin:0}
+    p.sub{opacity:.8;margin:0;font-size:13px}
+
+    /* Controls */
+    .controls{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+    .btn{background:transparent;border:1px solid rgba(255,255,255,0.08);padding:8px 12px;border-radius:8px;color:var(--text);cursor:pointer;font-size:14px}
+    .btn.active{border-color:var(--accent);box-shadow:0 6px 18px rgba(124,58,237,0.12);}
+    .btn.toggle{display:inline-flex;gap:8px;align-items:center}
+
+    /* Gallery grid */
+    .gallery{display:grid;grid-template-columns:repeat(4,1fr);gap:var(--gap);align-items:start}
+    .card{background:var(--card);border-radius:12px;overflow:hidden;position:relative;cursor:pointer;transition:transform .28s ease,box-shadow .28s}
+    .card:hover{transform:translateY(-6px);box-shadow:0 14px 40px rgba(2,6,23,.65)}
+    .card img{display:block;width:100%;height:220px;object-fit:cover;transition:transform .5s ease,filter .3s ease}
+    .card .meta{position:absolute;left:12px;bottom:12px;background:linear-gradient(90deg,rgba(0,0,0,0.3),rgba(0,0,0,0.15));padding:8px 10px;border-radius:10px;font-size:13px}
+
+    /* Responsive */
+    @media (max-width:1000px){.gallery{grid-template-columns:repeat(3,1fr)}}
+    @media (max-width:720px){.gallery{grid-template-columns:repeat(2,1fr)}}
+    @media (max-width:420px){.gallery{grid-template-columns:repeat(1,1fr)} .card img{height:280px}}
+
+    /* Lightbox overlay */
+    .lightbox{position:fixed;inset:0;background:rgba(4,8,20,.8);display:none;align-items:center;justify-content:center;padding:24px;z-index:1000}
+    .lightbox.open{display:flex}
+    .lightbox .panel{max-width:1200px;width:100%;max-height:90vh;display:flex;gap:16px;align-items:center}
+    .lightbox .imgwrap{flex:1;display:flex;align-items:center;justify-content:center}
+    .lightbox img{max-width:100%;max-height:90vh;border-radius:12px;box-shadow:0 20px 60px rgba(2,6,23,.7)}
+    .lightbox .info{width:320px;min-width:220px;color:var(--text)}
+    .lightbox .info h3{margin:0 0 8px 0}
+    .lightbox .info p{margin:0 0 12px 0;opacity:.9}
+
+    /* Controls inside lightbox */
+    .lb-btn{background:transparent;border:none;color:var(--text);font-size:20px;padding:10px;border-radius:8px;cursor:pointer}
+    .lb-btn:focus{outline:2px solid rgba(124,58,237,0.18)}
+    .lb-nav{display:flex;gap:8px;align-items:center}
+
+    /* small helper */
+    .filters{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+    .search{padding:8px 10px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);background:transparent;color:var(--text)}
+
+    /* subtle transitions for filter effect toggles */
+    .filter-chip{display:inline-flex;gap:8px;align-items:center;padding:6px 8px;border-radius:999px;border:1px solid rgba(255,255,255,0.04);cursor:pointer}
+    .filter-chip input{display:none}
+
+    /* Small footer note */
+    footer{margin-top:20px;font-size:13px;opacity:.7}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div>
+        <h1>Image Gallery</h1>
+        </div>
+
+      <div class="controls">
+        <div class="filters" aria-label="Categories">
+          <button class="btn active" data-cat="all">All</button>
+          <button class="btn" data-cat="nature">Nature</button>
+          <button class="btn" data-cat="city">City</button>
+          <button class="btn" data-cat="people">People</button>
+        </div>
+
+        <div style="display:flex;gap:8px;align-items:center">
+          <label class="filter-chip" title="Toggle grayscale">
+            <input type="checkbox" id="filter-grayscale">
+            <span>Grayscale</span>
+          </label>
+          <label class="filter-chip" title="Toggle sepia">
+            <input type="checkbox" id="filter-sepia">
+            <span>Sepia</span>
+          </label>
+          <label class="filter-chip" title="Toggle blur">
+            <input type="checkbox" id="filter-blur">
+            <span>Blur</span>
+          </label>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <div class="gallery" id="gallery" aria-live="polite">
+        <!-- Cards injected by JavaScript -->
+      </div>
+    </main>
+
+    <footer>
+      Tip: Use left/right arrow keys in the lightbox to move between images. Click background or press Esc to close.
+    </footer>
+  </div>
+
+  <!-- Lightbox -->
+  <div class="lightbox" id="lightbox" role="dialog" aria-modal="true">
+    <div class="panel">
+      <div style="display:flex;flex-direction:column;align-items:center;gap:8px;">
+        <button class="lb-btn" id="prevBtn" aria-label="Previous (Left arrow)">◀</button>
+        <div style="height:12px"></div>
+        <button class="lb-btn" id="nextBtn" aria-label="Next (Right arrow)">▶</button>
+      </div>
+
+      <div class="imgwrap">
+        <img id="lightboxImg" alt="Expanded image">
+      </div>
+
+      <div class="info">
+        <h3 id="lightboxTitle">Title</h3>
+        <p id="lightboxDesc">Description</p>
+        <div style="display:flex;gap:8px;align-items:center;margin-top:12px">
+          <button class="btn" id="closeBtn">Close</button>
+          <a id="openInNew" class="btn" target="_blank" rel="noopener">Open Image</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /* SAMPLE IMAGE DATA - replace src with your own images or APIs */
+    const images = [
+      {id:1,src:'https://images.unsplash.com/photo-1501785888041-af3ef285b470?q=80&w=1600&auto=format&fit=crop',title:'Mountain Lake',desc:'Misty morning at the alpine lake',cat:'nature'},
+      {id:2,src:'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?q=80&w=1600&auto=format&fit=crop',title:'Forest Path',desc:'A serene path through the woods',cat:'nature'},
+      {id:3,src:'https://images.unsplash.com/photo-1497436072909-60f360e1d4b1?q=80&w=1600&auto=format&fit=crop',title:'City Skyline',desc:'Sunset over downtown',cat:'city'},
+      {id:4,src:'https://images.unsplash.com/photo-1467269204594-9661b134dd2b?q=80&w=1600&auto=format&fit=crop',title:'Bridge',desc:'Night lights over the river',cat:'city'},
+      {id:5,src:'https://images.unsplash.com/photo-1491553895911-0055eca6402d?q=80&w=1600&auto=format&fit=crop',title:'Portrait',desc:'Candid street portrait',cat:'people'},
+      {id:6,src:'https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=1600&auto=format&fit=crop',title:'Traveler',desc:'Traveler captured in motion',cat:'people'},
+      {id:7,src:'https://images.unsplash.com/photo-1469474968028-56623f02e42e?q=80&w=1600&auto=format&fit=crop',title:'Desert',desc:'Golden sand dunes',cat:'nature'},
+      {id:8,src:'https://images.unsplash.com/photo-1473186578172-c141e6798cf4?q=80&w=1600&auto=format&fit=crop',title:'Urban Alley',desc:'Hidden alley art',cat:'city'}
+    ];
+
+    const gallery = document.getElementById('gallery');
+    const lightbox = document.getElementById('lightbox');
+    const lightboxImg = document.getElementById('lightboxImg');
+    const lightboxTitle = document.getElementById('lightboxTitle');
+    const lightboxDesc = document.getElementById('lightboxDesc');
+    const openInNew = document.getElementById('openInNew');
+    const prevBtn = document.getElementById('prevBtn');
+    const nextBtn = document.getElementById('nextBtn');
+    const closeBtn = document.getElementById('closeBtn');
+
+    let state = { index:0, filtered: images.slice(), category:'all' };
+
+    function renderGallery(list){
+      gallery.innerHTML='';
+      list.forEach((img, i) => {
+        const card = document.createElement('figure');
+        card.className = 'card';
+        card.setAttribute('data-index', i);
+        card.innerHTML = `
+          <img loading="lazy" src="${img.src}" alt="${img.title}">
+          <figcaption class="meta">${img.title}</figcaption>
+        `;
+        card.addEventListener('click', () => openLightbox(i));
+        gallery.appendChild(card);
+      });
+      applyActiveFiltersToThumbnails();
+    }
+
+    function openLightbox(idx){
+      state.index = idx;
+      const item = state.filtered[idx];
+      if(!item) return;
+      lightboxImg.src = item.src + '&fm=jpg';
+      lightboxTitle.textContent = item.title;
+      lightboxDesc.textContent = item.desc;
+      openInNew.href = item.src;
+      lightbox.classList.add('open');
+      document.body.style.overflow='hidden';
+      focusTrap();
+    }
+
+    function closeLightbox(){
+      lightbox.classList.remove('open');
+      document.body.style.overflow='auto';
+    }
+
+    function goto(offset){
+      const n = state.filtered.length;
+      state.index = (state.index + offset + n) % n;
+      const item = state.filtered[state.index];
+      lightboxImg.src = item.src + '&fm=jpg';
+      lightboxTitle.textContent = item.title;
+      lightboxDesc.textContent = item.desc;
+      openInNew.href = item.src;
+    }
+
+    // Keyboard navigation
+    window.addEventListener('keydown', (e)=>{
+      if(lightbox.classList.contains('open')){
+        if(e.key === 'ArrowRight') goto(1);
+        if(e.key === 'ArrowLeft') goto(-1);
+        if(e.key === 'Escape') closeLightbox();
+      }
+    });
+
+    // Lightbox controls
+    prevBtn.addEventListener('click', ()=>goto(-1));
+    nextBtn.addEventListener('click', ()=>goto(1));
+    closeBtn.addEventListener('click', closeLightbox);
+    lightbox.addEventListener('click', (e)=>{
+      if(e.target === lightbox) closeLightbox();
+    });
+
+    // Category filtering
+    document.querySelectorAll('[data-cat]').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        document.querySelectorAll('[data-cat]').forEach(b=>b.classList.remove('active'));
+        btn.classList.add('active');
+        const cat = btn.getAttribute('data-cat');
+        state.category = cat;
+        state.filtered = (cat === 'all') ? images.slice() : images.filter(i=>i.cat===cat);
+        renderGallery(state.filtered);
+      });
+    });
+
+    // Image filter toggles
+    const grayscale = document.getElementById('filter-grayscale');
+    const sepia = document.getElementById('filter-sepia');
+    const blur = document.getElementById('filter-blur');
+
+    [grayscale,sepia,blur].forEach(inp=>inp.addEventListener('change', applyActiveFiltersToThumbnails));
+
+    function applyActiveFiltersToThumbnails(){
+      const imgs = document.querySelectorAll('.card img');
+      imgs.forEach(imgEl=>{
+        let f = [];
+        if(grayscale.checked) f.push('grayscale(100%)');
+        if(sepia.checked) f.push('sepia(60%)');
+        if(blur.checked) f.push('blur(2px)');
+        imgEl.style.filter = f.join(' ');
+      });
+      // also apply to lightbox image when open
+      if(lightbox.classList.contains('open')){
+        let f2 = [];
+        if(grayscale.checked) f2.push('grayscale(100%)');
+        if(sepia.checked) f2.push('sepia(60%)');
+        if(blur.checked) f2.push('blur(1.5px)');
+        lightboxImg.style.filter = f2.join(' ');
+      } else {
+        lightboxImg.style.filter = '';
+      }
+    }
+
+    // Accessibility: trap focus inside lightbox
+    function focusTrap(){
+      const focusable = lightbox.querySelectorAll('button,a');
+      if(!focusable.length) return;
+      focusable[0].focus();
+      // simple trap: on Tab, stay within panel
+      lightbox.addEventListener('keydown', function trap(e){
+        if(e.key !== 'Tab') return;
+        const first = focusable[0];
+        const last = focusable[focusable.length-1];
+        if(e.shiftKey && document.activeElement === first){ e.preventDefault(); last.focus(); }
+        else if(!e.shiftKey && document.activeElement === last){ e.preventDefault(); first.focus(); }
+      }, {once:true});
+    }
+
+    // Initial render
+    state.filtered = images.slice();
+    renderGallery(state.filtered);
+
+</script>
+</body>
+</html>
